@@ -12,7 +12,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/account")
@@ -25,37 +24,36 @@ public class TransactionController {
 
     @PostMapping("/deposit")
     public ResponseEntity<MessageDto> deposit(
-            @RequestBody Double amount,
-            @RequestHeader("pin") String pin,
-            @AuthenticationPrincipal UUID accountNumber) {
-        String responseMessage = transactionService.deposit(accountNumber, pin, amount);
-        return ResponseEntity.ok(messageMapper.toMessageDto(responseMessage));
+            @AuthenticationPrincipal UUID accountNumber,
+            @RequestParam String pin,
+            @RequestParam double amount) {
+        String message = transactionService.deposit(accountNumber, pin, amount);
+        return ResponseEntity.ok(messageMapper.toMessageDto(message));
     }
 
     @PostMapping("/withdraw")
     public ResponseEntity<MessageDto> withdraw(
-            @RequestBody Double amount,
-            @RequestHeader("pin") String pin,
-            @AuthenticationPrincipal UUID accountNumber) {
-        String responseMessage = transactionService.withdraw(accountNumber, pin, amount);
-        return ResponseEntity.ok(messageMapper.toMessageDto(responseMessage));
+            @AuthenticationPrincipal UUID accountNumber,
+            @RequestParam String pin,
+            @RequestParam double amount) {
+        String message = transactionService.withdraw(accountNumber, pin, amount);
+        return ResponseEntity.ok(messageMapper.toMessageDto(message));
     }
 
     @PostMapping("/fund-transfer")
-    public ResponseEntity<MessageDto> transfer(
-            @RequestBody Double amount,
-            @RequestHeader("pin") String pin,
+    public ResponseEntity<MessageDto> fundTransfer(
+            @AuthenticationPrincipal UUID accountNumber,
             @RequestParam UUID targetAccountNumber,
-            @AuthenticationPrincipal UUID accountNumber) {
-        String responseMessage = transactionService.transfer(accountNumber, pin, targetAccountNumber, amount);
-        return ResponseEntity.ok(messageMapper.toMessageDto(responseMessage));
+            @RequestParam String pin,
+            @RequestParam double amount) {
+        String message = transactionService.transfer(accountNumber, pin, targetAccountNumber, amount);
+        return ResponseEntity.ok(messageMapper.toMessageDto(message));
     }
 
     @GetMapping("/transactions")
-    public ResponseEntity<List<TransactionDto>> getTransactionHistory(@AuthenticationPrincipal UUID accountNumber) {
-        List<TransactionDto> transactions = transactionService.getTransactionHistory(accountNumber).stream()
-                .map(transactionMapper::toTransactionDto)
-                .collect(Collectors.toList());
-        return ResponseEntity.ok(transactions);
+    public ResponseEntity<List<TransactionDto>> getTransactionHistory(
+            @AuthenticationPrincipal UUID accountNumber) {
+        List<TransactionDto> transactionHistory = transactionMapper.toDtoList(transactionService.getTransactionHistory(accountNumber));
+        return ResponseEntity.ok(transactionHistory);
     }
 }

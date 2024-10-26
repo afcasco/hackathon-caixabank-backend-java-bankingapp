@@ -5,6 +5,8 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Entity
@@ -26,6 +28,9 @@ public class User {
 
     @Column()
     private String hashedPin;
+
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<UserAsset> assets = new ArrayList<>();
 
     public User(UUID accountNumber, String name, String email, String phoneNumber, String address, double balance, String hashedPassword) {
         this.accountNumber = accountNumber;
