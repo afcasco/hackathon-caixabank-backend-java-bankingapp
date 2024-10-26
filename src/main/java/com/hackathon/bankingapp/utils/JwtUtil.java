@@ -47,6 +47,7 @@ public class JwtUtil {
         return (accountNumber.equals(userDetails.getUsername()) && !isTokenExpired(token));
     }
 
+
     public Instant getExpirationDateFromToken(String token) {
         Claims claims = Jwts.parser()
                 .setSigningKey(jwtSecret)
@@ -69,6 +70,4 @@ public class JwtUtil {
             return false;
         }
     }
-
-
 }

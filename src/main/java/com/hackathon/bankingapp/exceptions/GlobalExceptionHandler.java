@@ -5,6 +5,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 
+import java.util.Map;
+
 @ControllerAdvice
 public class GlobalExceptionHandler {
 
@@ -23,9 +25,26 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ex.getMessage());
     }
 
+    @ExceptionHandler(InvalidOtpException.class)
+    public ResponseEntity<Map<String, String>> handleInvalidOtpException(InvalidOtpException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
+                Map.of("error", "Invalid OTP")
+        );
+    }
+
+    @ExceptionHandler(InvalidResetTokenException.class)
+    public ResponseEntity<Map<String, String>> handleInvalidResetTokenException(InvalidResetTokenException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
+                Map.of("error", "Invalid reset token")
+        );
+    }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<?> handleGlobalException(Exception ex) {
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ex.getMessage());
+    public ResponseEntity<Map<String, String>> handleGenericException(Exception e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
+                Map.of("error", "Unable to process request")
+        );
     }
+
+
 }

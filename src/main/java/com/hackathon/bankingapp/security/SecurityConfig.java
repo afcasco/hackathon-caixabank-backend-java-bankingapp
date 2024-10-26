@@ -31,7 +31,11 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .authorizeHttpRequests(authorizeRequests -> authorizeRequests
-                        .requestMatchers("/api/users/login", "/api/users/register").permitAll()
+                        .requestMatchers(
+                                "/api/users/login",
+                                "/api/users/register",
+                                "/api/auth/password-reset/**"
+                        ).permitAll()
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(exceptionHandling ->
