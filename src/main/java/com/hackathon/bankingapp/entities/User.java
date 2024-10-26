@@ -25,7 +25,7 @@ public class User {
     private String hashedPassword;
 
     @Column()
-    private String pin;
+    private String hashedPin;
 
     public User(UUID accountNumber, String name, String email, String phoneNumber, String address, double balance, String hashedPassword) {
         this.accountNumber = accountNumber;
