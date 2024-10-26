@@ -23,6 +23,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @RequiredArgsConstructor
 public class OtpService {
 
+    private final Random random = new Random();
     private static final Logger logger = LoggerFactory.getLogger(OtpService.class);
     private static final int OTP_EXPIRATION_SECONDS = 60;
     private static final int RESET_TOKEN_EXPIRATION_SECONDS = 3600;
@@ -71,7 +72,7 @@ public class OtpService {
     }
 
     private String generateOtp() {
-        return String.format("%06d", new Random().nextInt(999999));
+        return String.format("%06d", random.nextInt(999999));
     }
 
     private boolean otpExpired(OtpCode otpCode) {

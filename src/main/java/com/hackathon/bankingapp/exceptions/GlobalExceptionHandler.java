@@ -11,12 +11,12 @@ import java.util.Map;
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(UserNotFoundException.class)
-    public ResponseEntity<?> handleUserNotFoundException(UserNotFoundException ex) {
+    public ResponseEntity<String> handleUserNotFoundException(UserNotFoundException ex) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ex.getMessage());
     }
 
     @ExceptionHandler(InvalidCredentialsException.class)
-    public ResponseEntity<?> handleInvalidCredentialsException(InvalidCredentialsException ex) {
+    public ResponseEntity<String> handleInvalidCredentialsException(InvalidCredentialsException ex) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ex.getMessage());
     }
 
@@ -40,10 +40,9 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(InvalidPinException.class)
-    public ResponseEntity<?> handleInvalidPinException(InvalidPinException ex) {
+    public ResponseEntity<Map<String, String>> handleInvalidPinException(InvalidPinException ex) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", ex.getMessage()));
     }
-
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, String>> handleGenericException(Exception e) {
@@ -51,6 +50,4 @@ public class GlobalExceptionHandler {
                 Map.of("error", "Unable to process request")
         );
     }
-
-
 }
