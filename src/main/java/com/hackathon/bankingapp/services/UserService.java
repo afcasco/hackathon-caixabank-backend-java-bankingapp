@@ -5,6 +5,7 @@ import com.hackathon.bankingapp.dto.UserRegistrationDto;
 import com.hackathon.bankingapp.dto.UserResponseDto;
 import com.hackathon.bankingapp.entities.User;
 import com.hackathon.bankingapp.exceptions.InvalidCredentialsException;
+import com.hackathon.bankingapp.exceptions.UserAlreadyExistsException;
 import com.hackathon.bankingapp.exceptions.UserNotFoundException;
 import com.hackathon.bankingapp.repositories.UserRepository;
 import com.hackathon.bankingapp.utils.JwtUtil;
@@ -24,10 +25,10 @@ public class UserService {
 
     public UserResponseDto registerUser(UserRegistrationDto registrationDto) {
         if (userRepository.existsByEmail(registrationDto.getEmail())) {
-            throw new IllegalArgumentException("Email already exists.");
+            throw new UserAlreadyExistsException("Email already exists.");
         }
         if (userRepository.existsByPhoneNumber(registrationDto.getPhoneNumber())) {
-            throw new IllegalArgumentException("Phone number already exists.");
+            throw new UserAlreadyExistsException("Phone number already exists.");
         }
 
         String hashedPassword = passwordEncoder.encode(registrationDto.getPassword());
@@ -50,11 +51,11 @@ public class UserService {
         if (loginRequest.getIdentifier().contains("@")) {
             user = userRepository.findByEmail(loginRequest.getIdentifier())
                     .orElseThrow(() ->
-                            new UserNotFoundException("User not found for the given email: " + loginRequest.getIdentifier()));
+                            new UserNotFoundException("User not found for the given identifier: " + loginRequest.getIdentifier()));
         } else {
             user = userRepository.findByAccountNumber(UUID.fromString(loginRequest.getIdentifier()))
                     .orElseThrow(() ->
-                            new UserNotFoundException("User not found for the given account number: " + loginRequest.getIdentifier()));
+                            new UserNotFoundException("User not found for the given identifier: " + loginRequest.getIdentifier()));
         }
 
         if (!passwordEncoder.matches(loginRequest.getPassword(), user.getHashedPassword())) {
