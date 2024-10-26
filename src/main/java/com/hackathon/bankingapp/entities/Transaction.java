@@ -1,4 +1,3 @@
-// Transaction.java
 package com.hackathon.bankingapp.entities;
 
 import jakarta.persistence.*;
@@ -27,4 +26,6 @@ public class Transaction {
     private TransactionType transactionType;
 
     private Instant transactionDate;
+
+    private String assetSymbol;
 }

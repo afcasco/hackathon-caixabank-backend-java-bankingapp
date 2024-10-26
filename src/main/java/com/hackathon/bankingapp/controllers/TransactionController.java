@@ -24,36 +24,47 @@ public class TransactionController {
 
     @PostMapping("/deposit")
     public ResponseEntity<MessageDto> deposit(
-            @AuthenticationPrincipal UUID accountNumber,
-            @RequestParam String pin,
-            @RequestParam double amount) {
-        String message = transactionService.deposit(accountNumber, pin, amount);
+            @RequestBody TransactionDto.DepositRequest request,
+            @AuthenticationPrincipal UUID accountNumber) {
+        String message = transactionService.deposit(accountNumber, request.getPin(), request.getAmount());
         return ResponseEntity.ok(messageMapper.toMessageDto(message));
     }
 
     @PostMapping("/withdraw")
     public ResponseEntity<MessageDto> withdraw(
-            @AuthenticationPrincipal UUID accountNumber,
-            @RequestParam String pin,
-            @RequestParam double amount) {
-        String message = transactionService.withdraw(accountNumber, pin, amount);
+            @RequestBody TransactionDto.WithdrawRequest request,
+            @AuthenticationPrincipal UUID accountNumber) {
+        String message = transactionService.withdraw(accountNumber, request.getPin(), request.getAmount());
         return ResponseEntity.ok(messageMapper.toMessageDto(message));
     }
 
     @PostMapping("/fund-transfer")
     public ResponseEntity<MessageDto> fundTransfer(
-            @AuthenticationPrincipal UUID accountNumber,
-            @RequestParam UUID targetAccountNumber,
-            @RequestParam String pin,
-            @RequestParam double amount) {
-        String message = transactionService.transfer(accountNumber, pin, targetAccountNumber, amount);
+            @RequestBody TransactionDto.TransferRequest request,
+            @AuthenticationPrincipal UUID accountNumber) {
+        String message = transactionService.transfer(accountNumber, request.getPin(), request.getTargetAccountNumber(), request.getAmount());
+        return ResponseEntity.ok(messageMapper.toMessageDto(message));
+    }
+
+    @PostMapping("/buy-asset")
+    public ResponseEntity<MessageDto> buyAsset(
+            @RequestBody TransactionDto.AssetTransactionRequest request,
+            @AuthenticationPrincipal UUID accountNumber) {
+        String message = transactionService.buyAsset(accountNumber, request.getPin(), request.getAssetSymbol(), request.getAmount());
+        return ResponseEntity.ok(messageMapper.toMessageDto(message));
+    }
+
+    @PostMapping("/sell-asset")
+    public ResponseEntity<MessageDto> sellAsset(
+            @RequestBody TransactionDto.AssetTransactionRequest request,
+            @AuthenticationPrincipal UUID accountNumber) {
+        String message = transactionService.sellAsset(accountNumber, request.getPin(), request.getAssetSymbol(), request.getQuantity());
         return ResponseEntity.ok(messageMapper.toMessageDto(message));
     }
 
     @GetMapping("/transactions")
-    public ResponseEntity<List<TransactionDto>> getTransactionHistory(
-            @AuthenticationPrincipal UUID accountNumber) {
-        List<TransactionDto> transactionHistory = transactionMapper.toDtoList(transactionService.getTransactionHistory(accountNumber));
+    public ResponseEntity<List<TransactionDto.Response>> getTransactionHistory(@AuthenticationPrincipal UUID accountNumber) {
+        List<TransactionDto.Response> transactionHistory = transactionMapper.toDtoList(transactionService.getTransactionHistory(accountNumber));
         return ResponseEntity.ok(transactionHistory);
     }
 }

@@ -1,25 +1,27 @@
 package com.hackathon.bankingapp.dto;
 
 import jakarta.validation.constraints.Email;
-import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.Pattern;
 import lombok.Data;
 
 @Data
 public class UserRegistrationDto {
 
-    @NotBlank(message = "Name is required")
+    @NotEmpty(message = "Name is required")
     private String name;
 
-    @NotBlank(message = "Password is required")
-    private String password;
-
     @Email(message = "Invalid email format")
-    @NotBlank(message = "Email is required")
     private String email;
 
-    @NotBlank(message = "Phone number is required")
+    @NotEmpty(message = "Password is required")
+    @Pattern(regexp = "^(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]{8,}$",
+            message = "Password must contain at least one uppercase letter, one digit, one special character, and be at least 8 characters long")
+    private String password;
+
+    @NotEmpty(message = "Phone number is required")
     private String phoneNumber;
 
-    @NotBlank(message = "Address is required")
+    @NotEmpty(message = "Address is required")
     private String address;
 }

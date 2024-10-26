@@ -8,6 +8,7 @@ import com.hackathon.bankingapp.exceptions.InsufficientBalanceException;
 import com.hackathon.bankingapp.exceptions.UserNotFoundException;
 import com.hackathon.bankingapp.repositories.TransactionRepository;
 import com.hackathon.bankingapp.repositories.UserRepository;
+import com.hackathon.bankingapp.repositories.UserAssetRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,79 +23,51 @@ public class TransactionService {
 
     private final TransactionRepository transactionRepository;
     private final UserRepository userRepository;
+    private final UserAssetRepository userAssetRepository;
     private final PinService pinService;
     private final MarketService marketService;
     private final EmailService emailService;
 
-
     @Transactional
     public String deposit(UUID accountNumber, String pin, Double amount) {
-        User user = userRepository.findByAccountNumber(accountNumber)
-                .orElseThrow(() -> new UserNotFoundException("User not found"));
+        User user = getUserByAccountNumber(accountNumber);
         pinService.verifyPin(accountNumber, pin);
-
         user.setBalance(user.getBalance() + amount);
         userRepository.save(user);
-
-        Transaction transaction = new Transaction(null, accountNumber, accountNumber, amount, TransactionType.CASH_DEPOSIT, Instant.now());
-        transactionRepository.save(transaction);
-
+        saveTransaction(accountNumber, amount, TransactionType.CASH_DEPOSIT, null);
         return "Cash deposited successfully";
     }
 
     @Transactional
     public String withdraw(UUID accountNumber, String pin, Double amount) {
-        User user = userRepository.findByAccountNumber(accountNumber)
-                .orElseThrow(() -> new UserNotFoundException("User not found"));
+        User user = getUserByAccountNumber(accountNumber);
         pinService.verifyPin(accountNumber, pin);
-
-        if (user.getBalance() < amount) {
-            throw new InsufficientBalanceException("Insufficient balance");
-        }
-
+        if (user.getBalance() < amount) throw new InsufficientBalanceException("Insufficient balance");
         user.setBalance(user.getBalance() - amount);
         userRepository.save(user);
-
-        Transaction transaction = new Transaction(null, accountNumber, accountNumber, amount, TransactionType.CASH_WITHDRAWAL, Instant.now());
-        transactionRepository.save(transaction);
-
+        saveTransaction(accountNumber, amount, TransactionType.CASH_WITHDRAWAL, null);
         return "Cash withdrawn successfully";
     }
 
     @Transactional
     public String transfer(UUID sourceAccount, String pin, UUID targetAccount, Double amount) {
-        User sender = userRepository.findByAccountNumber(sourceAccount)
-                .orElseThrow(() -> new UserNotFoundException("Sender not found"));
-        User receiver = userRepository.findByAccountNumber(targetAccount)
-                .orElseThrow(() -> new UserNotFoundException("Receiver not found"));
+        User sender = getUserByAccountNumber(sourceAccount);
+        User receiver = getUserByAccountNumber(targetAccount);
         pinService.verifyPin(sourceAccount, pin);
-
-        if (sender.getBalance() < amount) {
-            throw new InsufficientBalanceException("Insufficient balance");
-        }
-
+        if (sender.getBalance() < amount) throw new InsufficientBalanceException("Insufficient balance");
         sender.setBalance(sender.getBalance() - amount);
         receiver.setBalance(receiver.getBalance() + amount);
-
         userRepository.save(sender);
         userRepository.save(receiver);
-
-        Transaction transaction = new Transaction(null, sourceAccount, targetAccount, amount, TransactionType.CASH_TRANSFER, Instant.now());
-        transactionRepository.save(transaction);
-
+        saveTransaction(sourceAccount, amount, TransactionType.CASH_TRANSFER, null);
         return "Fund transferred successfully";
     }
 
     @Transactional
     public String buyAsset(UUID accountNumber, String pin, String assetSymbol, double amount) {
-        User user = userRepository.findByAccountNumber(accountNumber)
-                .orElseThrow(() -> new UserNotFoundException("User not found"));
-
+        User user = getUserByAccountNumber(accountNumber);
         pinService.verifyPin(accountNumber, pin);
-
         double assetPrice = marketService.getPriceForSymbol(assetSymbol);
-        if (assetPrice == 0.0) throw new IllegalArgumentException("Invalid asset symbol");
-
         double quantityToBuy = amount / assetPrice;
 
         if (user.getBalance() < amount) throw new InsufficientBalanceException("Insufficient balance");
@@ -102,60 +75,59 @@ public class TransactionService {
         user.setBalance(user.getBalance() - amount);
         userRepository.save(user);
 
-        UserAsset asset = new UserAsset();
-        asset.setUser(user);
-        asset.setSymbol(assetSymbol);
-        asset.setQuantity(quantityToBuy);
-        asset.setPurchasePrice(assetPrice);
-        asset.setPurchaseDate(Instant.now());
+        UserAsset asset = new UserAsset(null, user, assetSymbol, quantityToBuy, assetPrice, Instant.now());
+        userAssetRepository.save(asset);
 
-        user.getAssets().add(asset);  // Add to user assets
-        userRepository.save(user);
-
+        saveTransaction(accountNumber, amount, TransactionType.ASSET_PURCHASE, assetSymbol);
         emailService.sendInvestmentConfirmation(user, assetSymbol, quantityToBuy, amount, "Investment Purchase Confirmation");
 
         return "Asset purchase successful";
     }
 
-
     @Transactional
-    public String sellAsset(UUID accountNumber, String pin, String assetSymbol, double quantity) {
-        User user = userRepository.findByAccountNumber(accountNumber)
-                .orElseThrow(() -> new UserNotFoundException("User not found"));
+    public String sellAsset(UUID accountNumber, String pin, String assetSymbol, double quantityToSell) {
+        User user = getUserByAccountNumber(accountNumber);
         pinService.verifyPin(accountNumber, pin);
 
-        double totalAvailableQuantity = user.getAssets().stream()
-                .filter(asset -> asset.getSymbol().equals(assetSymbol))
-                .mapToDouble(UserAsset::getQuantity)
-                .sum();
-
-        if (totalAvailableQuantity < quantity) throw new InsufficientBalanceException("Insufficient asset quantity for sale");
-
-        double currentPrice = marketService.getPriceForSymbol(assetSymbol);
-        double saleAmount = quantity * currentPrice;
-
-        user.setBalance(user.getBalance() + saleAmount);
-
-        double remainingQuantityToSell = quantity;
-        for (UserAsset asset : user.getAssets()) {
-            if (!asset.getSymbol().equals(assetSymbol) || remainingQuantityToSell <= 0) continue;
-
-            double quantityToSell = Math.min(asset.getQuantity(), remainingQuantityToSell);
-            asset.setQuantity(asset.getQuantity() - quantityToSell);
-            remainingQuantityToSell -= quantityToSell;
-
-            if (asset.getQuantity() == 0) user.getAssets().remove(asset);
+        List<UserAsset> userAssets = userAssetRepository.findByUserAndSymbol(user, assetSymbol);
+        double totalQuantity = userAssets.stream().mapToDouble(UserAsset::getQuantity).sum();
+        if (totalQuantity < quantityToSell) {
+            throw new InsufficientBalanceException("Insufficient asset quantity for sale");
         }
 
+        double currentPrice = marketService.getPriceForSymbol(assetSymbol);
+        double saleProceeds = quantityToSell * currentPrice;
+        user.setBalance(user.getBalance() + saleProceeds);
         userRepository.save(user);
 
-        emailService.sendInvestmentConfirmation(user, assetSymbol, -quantity, saleAmount, "Investment Sale Confirmation");
+        double remainingQuantity = quantityToSell;
+        for (UserAsset asset : userAssets) {
+            if (asset.getQuantity() <= remainingQuantity) {
+                remainingQuantity -= asset.getQuantity();
+                userAssetRepository.delete(asset);
+            } else {
+                asset.setQuantity(asset.getQuantity() - remainingQuantity);
+                userAssetRepository.save(asset);
+                break;
+            }
+        }
+
+        saveTransaction(accountNumber, saleProceeds, TransactionType.ASSET_SELL, assetSymbol);
+        emailService.sendInvestmentConfirmation(user, assetSymbol, -quantityToSell, saleProceeds, "Investment Sale Confirmation");
 
         return "Asset sale successful";
     }
 
-
     public List<Transaction> getTransactionHistory(UUID accountNumber) {
         return transactionRepository.findBySourceAccountNumber(accountNumber);
+    }
+
+    private User getUserByAccountNumber(UUID accountNumber) {
+        return userRepository.findByAccountNumber(accountNumber)
+                .orElseThrow(() -> new UserNotFoundException("User not found"));
+    }
+
+    private void saveTransaction(UUID accountNumber, double amount, TransactionType type, String assetSymbol) {
+        transactionRepository.save(new Transaction(null, accountNumber, accountNumber, amount, type, Instant.now(), assetSymbol));
     }
 }
