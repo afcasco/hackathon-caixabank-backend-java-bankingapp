@@ -8,7 +8,6 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
-import java.util.Optional;
 
 @Service
 public class TokenBlacklistService {
@@ -16,7 +15,7 @@ public class TokenBlacklistService {
     private final BlacklistedTokenRepository blacklistedTokenRepository;
     private final JwtUtil jwtUtil;
 
-    public TokenBlacklistService(BlacklistedTokenRepository blacklistedTokenRepository, @Lazy JwtUtil jwtUtil) {
+    public TokenBlacklistService(BlacklistedTokenRepository blacklistedTokenRepository,@Lazy JwtUtil jwtUtil) {
         this.blacklistedTokenRepository = blacklistedTokenRepository;
         this.jwtUtil = jwtUtil;
     }
@@ -32,12 +31,9 @@ public class TokenBlacklistService {
     }
 
     public boolean isTokenBlacklisted(String token) {
-        Optional<BlacklistedToken> blacklistedToken = blacklistedTokenRepository.findById(token);
-
-        if (blacklistedToken.isPresent()) {
-            Instant expirationTime = blacklistedToken.get().getExpiration();
-            return Instant.now().isBefore(expirationTime);
-        }
-        return false;
+        return blacklistedTokenRepository.findById(token)
+                .map(blacklistedToken -> Instant.now().isBefore(blacklistedToken.getExpiration()))
+                .orElse(false);
     }
+
 }

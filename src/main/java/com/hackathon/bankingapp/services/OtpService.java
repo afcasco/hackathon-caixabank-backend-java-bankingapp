@@ -24,6 +24,8 @@ import java.util.concurrent.ConcurrentHashMap;
 public class OtpService {
 
     private static final Logger logger = LoggerFactory.getLogger(OtpService.class);
+    private static final int OTP_EXPIRATION_SECONDS = 60;
+    private static final int RESET_TOKEN_EXPIRATION_SECONDS = 3600;
 
     private final Map<String, OtpCode> otpStore = new ConcurrentHashMap<>();
     private final Map<String, ResetToken> resetTokenStore = new ConcurrentHashMap<>();
@@ -32,11 +34,9 @@ public class OtpService {
     private final EmailService emailService;
 
     public void sendOtp(String identifier) {
-        User user = userRepository.findByEmail(identifier)
-                .orElseThrow(() -> new UserNotFoundException("User not found for identifier: " + identifier));
-
-        String otp = String.format("%06d", new Random().nextInt(999999));
-        otpStore.put(identifier, new OtpCode(otp, user.getEmail(), Instant.now().plusSeconds(60)));
+        User user = getUserByIdentifier(identifier);
+        String otp = generateOtp();
+        otpStore.put(identifier, new OtpCode(otp, user.getEmail(), Instant.now().plusSeconds(OTP_EXPIRATION_SECONDS)));
 
         emailService.sendEmail(user.getEmail(), "OTP Code", "OTP: " + otp);
         logger.debug("OTP sent to {}: {}", identifier, otp);
@@ -44,41 +44,61 @@ public class OtpService {
 
     public String verifyOtp(String identifier, String otp) {
         OtpCode otpCode = otpStore.get(identifier);
-        logger.debug("Verifying OTP for identifier {}: expected={}, received={}", identifier, otpCode, otp);
-
-        if (otpCode == null || !otpCode.getCode().equals(otp)) {
-            throw new InvalidOtpException("Invalid OTP.");
-        }
-
-        if (otpCode.getExpiration().isBefore(Instant.now())) {
-            otpStore.remove(identifier);
-            throw new InvalidOtpException("OTP has expired.");
-        }
-
+        validateOtp(otpCode, identifier, otp);
         otpStore.remove(identifier);
 
-        String resetToken = UUID.randomUUID().toString();
-        resetTokenStore.put(identifier, new ResetToken(resetToken, Instant.now().plusSeconds(3600)));
+        String resetToken = generateResetToken(identifier);
         logger.debug("Generated reset token for identifier {}: {}", identifier, resetToken);
-
         return resetToken;
     }
 
     public void resetPassword(String identifier, String resetToken, String newPassword) {
-        User user = userRepository.findByEmail(identifier)
-                .orElseThrow(() -> new UserNotFoundException("User not found for identifier: " + identifier));
+        User user = getUserByIdentifier(identifier);
+        validateResetToken(identifier, resetToken);
 
-        ResetToken storedToken = resetTokenStore.get(identifier);
-        logger.debug("Resetting password for identifier {}: expected={}, provided={}", identifier, storedToken, resetToken);
-
-        if (storedToken == null || !storedToken.getToken().equals(resetToken) || Instant.now().isAfter(storedToken.getExpiration())) {
-            throw new InvalidResetTokenException("Invalid or expired reset token.");
-        }
-
-        user.setHashedPassword(passwordEncoder.encode(newPassword));
-        userRepository.save(user);
+        updatePassword(user, newPassword);
         resetTokenStore.remove(identifier);
         logger.debug("Password reset successfully for identifier {}", identifier);
+    }
 
+    private User getUserByIdentifier(String identifier) {
+        return userRepository.findByEmail(identifier)
+                .orElseThrow(() -> new UserNotFoundException("User not found for identifier: " + identifier));
+    }
+
+    private String generateOtp() {
+        return String.format("%06d", new Random().nextInt(999999));
+    }
+
+    private void validateOtp(OtpCode otpCode, String identifier, String otp) {
+        if (otpCode == null || !otpCode.getCode().equals(otp)) {
+            logger.warn("Invalid OTP for identifier {}: expected={}, received={}", identifier, otpCode, otp);
+            throw new InvalidOtpException("Invalid OTP.");
+        }
+        if (otpCode.getExpiration().isBefore(Instant.now())) {
+            otpStore.remove(identifier);
+            logger.warn("Expired OTP for identifier {}: {}", identifier, otp);
+            throw new InvalidOtpException("OTP has expired.");
+        }
+    }
+
+    private String generateResetToken(String identifier) {
+        String resetToken = UUID.randomUUID().toString();
+        resetTokenStore.put(identifier, new ResetToken(resetToken, Instant.now().plusSeconds(RESET_TOKEN_EXPIRATION_SECONDS)));
+        return resetToken;
+    }
+
+    private void validateResetToken(String identifier, String resetToken) {
+        ResetToken storedToken = resetTokenStore.get(identifier);
+        if (storedToken == null || !storedToken.getToken().equals(resetToken) || Instant.now().isAfter(storedToken.getExpiration())) {
+            logger.warn("Invalid or expired reset token for identifier {}: expected={}, provided={}", identifier, storedToken, resetToken);
+            throw new InvalidResetTokenException("Invalid or expired reset token.");
+        }
+    }
+
+    private void updatePassword(User user, String newPassword) {
+        user.setHashedPassword(passwordEncoder.encode(newPassword));
+        userRepository.save(user);
+        logger.debug("Password updated for user {}", user.getEmail());
     }
 }

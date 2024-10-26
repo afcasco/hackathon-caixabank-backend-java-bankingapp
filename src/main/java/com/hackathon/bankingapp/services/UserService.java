@@ -10,6 +10,8 @@ import com.hackathon.bankingapp.exceptions.UserNotFoundException;
 import com.hackathon.bankingapp.repositories.UserRepository;
 import com.hackathon.bankingapp.utils.JwtUtil;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -19,54 +21,29 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class UserService {
 
+    private static final Logger logger = LoggerFactory.getLogger(UserService.class);
+
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
 
     public UserResponseDto registerUser(UserRegistrationDto registrationDto) {
-        if (userRepository.existsByEmail(registrationDto.getEmail())) {
-            throw new UserAlreadyExistsException("Email already exists.");
-        }
-        if (userRepository.existsByPhoneNumber(registrationDto.getPhoneNumber())) {
-            throw new UserAlreadyExistsException("Phone number already exists.");
-        }
-
-        String hashedPassword = passwordEncoder.encode(registrationDto.getPassword());
-
-        User user = new User();
-        user.setName(registrationDto.getName());
-        user.setEmail(registrationDto.getEmail());
-        user.setPhoneNumber(registrationDto.getPhoneNumber());
-        user.setAddress(registrationDto.getAddress());
-        user.setHashedPassword(hashedPassword);
-
-        user = userRepository.save(user);
+        checkUserExists(registrationDto);
+        User user = createUser(registrationDto);
+        userRepository.save(user);
+        logger.debug("User registered successfully with email: {}", registrationDto.getEmail());
 
         return mapToResponseDto(user);
     }
 
     public String loginUser(LoginRequestDto loginRequest) {
-        User user;
+        User user = findUserByIdentifier(loginRequest.getIdentifier());
+        checkPassword(loginRequest.getPassword(), user);
+        String token = jwtUtil.generateToken(user.getAccountNumber().toString());
+        logger.debug("User logged in with identifier: {}", loginRequest.getIdentifier());
 
-        if (loginRequest.getIdentifier().contains("@")) {
-            user = userRepository.findByEmail(loginRequest.getIdentifier())
-                    .orElseThrow(() ->
-                            new UserNotFoundException("User not found for the given identifier: " + loginRequest.getIdentifier()));
-        } else {
-            user = userRepository.findByAccountNumber(UUID.fromString(loginRequest.getIdentifier()))
-                    .orElseThrow(() ->
-                            new UserNotFoundException("User not found for the given identifier: " + loginRequest.getIdentifier()));
-        }
-
-        if (!passwordEncoder.matches(loginRequest.getPassword(), user.getHashedPassword())) {
-            throw new InvalidCredentialsException();
-        }
-
-        return jwtUtil.generateToken(user.getAccountNumber().toString());
+        return token;
     }
-
-
-
 
     public UserResponseDto getUserInfoByAccountNumber(String accountNumber) {
         User user = userRepository.findByAccountNumber(UUID.fromString(accountNumber))
@@ -75,15 +52,55 @@ public class UserService {
         return mapToResponseDto(user);
     }
 
-    public UserResponseDto mapToResponseDto(User user) {
-        UserResponseDto responseDto = new UserResponseDto();
-        responseDto.setName(user.getName());
-        responseDto.setEmail(user.getEmail());
-        responseDto.setPhoneNumber(user.getPhoneNumber());
-        responseDto.setAddress(user.getAddress());
-        responseDto.setAccountNumber(user.getAccountNumber().toString());
-        responseDto.setHashedPassword(user.getHashedPassword());
-        return responseDto;
+
+    private void checkUserExists(UserRegistrationDto registrationDto) {
+        if (userRepository.existsByEmail(registrationDto.getEmail())) {
+            logger.warn("Attempt to register an already existing email: {}", registrationDto.getEmail());
+            throw new UserAlreadyExistsException("Email already exists.");
+        }
+        if (userRepository.existsByPhoneNumber(registrationDto.getPhoneNumber())) {
+            logger.warn("Attempt to register an already existing phone number: {}", registrationDto.getPhoneNumber());
+            throw new UserAlreadyExistsException("Phone number already exists.");
+        }
+    }
+
+    private User createUser(UserRegistrationDto registrationDto) {
+        String hashedPassword = passwordEncoder.encode(registrationDto.getPassword());
+        return new User(
+                null,
+                registrationDto.getName(),
+                registrationDto.getEmail(),
+                registrationDto.getPassword(),
+                registrationDto.getPhoneNumber(),
+                registrationDto.getAddress(),
+                0.0,
+                hashedPassword
+        );
+    }
+
+    private User findUserByIdentifier(String identifier) {
+        return identifier.contains("@") ?
+                userRepository.findByEmail(identifier).orElseThrow(() ->
+                        new UserNotFoundException("User not found for the given identifier: " + identifier)) :
+                userRepository.findByAccountNumber(UUID.fromString(identifier)).orElseThrow(() ->
+                        new UserNotFoundException("User not found for the given identifier: " + identifier));
+    }
+
+    private void checkPassword(String password, User user) {
+        if (!passwordEncoder.matches(password, user.getHashedPassword())) {
+            logger.warn("Invalid credentials provided for user: {}", user.getEmail());
+            throw new InvalidCredentialsException();
+        }
+    }
+
+    private UserResponseDto mapToResponseDto(User user) {
+        return new UserResponseDto(
+                user.getName(),
+                user.getEmail(),
+                user.getPhoneNumber(),
+                user.getAddress(),
+                user.getAccountNumber().toString(),
+                user.getHashedPassword()
+        );
     }
 }
-
