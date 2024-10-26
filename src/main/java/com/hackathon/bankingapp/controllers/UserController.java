@@ -4,6 +4,7 @@ import com.hackathon.bankingapp.dto.LoginRequestDto;
 import com.hackathon.bankingapp.dto.LoginResponseDto;
 import com.hackathon.bankingapp.dto.UserRegistrationDto;
 import com.hackathon.bankingapp.dto.UserResponseDto;
+import com.hackathon.bankingapp.mappers.UserMapper;
 import com.hackathon.bankingapp.services.TokenBlacklistService;
 import com.hackathon.bankingapp.services.UserService;
 import jakarta.validation.Valid;
@@ -20,6 +21,7 @@ public class UserController {
 
     private final UserService userService;
     private final TokenBlacklistService tokenBlacklistService;
+    private final UserMapper userMapper;
 
     @PostMapping("/login")
     public ResponseEntity<LoginResponseDto> loginUser(@Valid @RequestBody LoginRequestDto loginRequest) {
@@ -29,8 +31,8 @@ public class UserController {
 
     @PostMapping("/register")
     public ResponseEntity<UserResponseDto> registerUser(@Valid @RequestBody UserRegistrationDto registrationDto) {
-        UserResponseDto responseDto = userService.registerUser(registrationDto);
-        return ResponseEntity.status(HttpStatus.CREATED).body(responseDto);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(userMapper.mapToResponseDto(userService.registerUser(registrationDto)));
     }
 
     @GetMapping("/logout")

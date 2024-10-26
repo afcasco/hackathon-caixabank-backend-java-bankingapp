@@ -2,6 +2,7 @@ package com.hackathon.bankingapp.controllers;
 
 import com.hackathon.bankingapp.dto.AccountInfoDto;
 import com.hackathon.bankingapp.dto.UserResponseDto;
+import com.hackathon.bankingapp.mappers.UserMapper;
 import com.hackathon.bankingapp.services.AccountService;
 import com.hackathon.bankingapp.services.UserService;
 import lombok.RequiredArgsConstructor;
@@ -19,14 +20,13 @@ public class DashboardController {
 
     private final UserService userService;
     private final AccountService accountService;
+    private final UserMapper userMapper;
 
     @GetMapping("/user")
     public ResponseEntity<UserResponseDto> getUserInfo() {
         UserDetails userDetails = (UserDetails) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         String accountNumber = userDetails.getUsername();
-
-        UserResponseDto userInfo = userService.getUserInfoByAccountNumber(accountNumber);
-        return ResponseEntity.ok(userInfo);
+        return ResponseEntity.ok(userMapper.mapToResponseDto(userService.getUserInfoByAccountNumber(accountNumber)));
     }
 
     @GetMapping("/account")

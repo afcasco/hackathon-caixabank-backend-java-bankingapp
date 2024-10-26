@@ -34,52 +34,48 @@ public class OtpService {
     private final EmailService emailService;
 
     public void sendOtp(String identifier) {
-        User user = getUserByIdentifier(identifier);
+        User user = getUserByEmail(identifier);
         String otp = generateOtp();
         otpStore.put(identifier, new OtpCode(otp, user.getEmail(), Instant.now().plusSeconds(OTP_EXPIRATION_SECONDS)));
 
         emailService.sendEmail(user.getEmail(), "OTP Code", "OTP: " + otp);
-        logger.debug("OTP sent to {}: {}", identifier, otp);
+        logger.info("OTP sent to user with identifier: {}", identifier);
     }
 
     public String verifyOtp(String identifier, String otp) {
         OtpCode otpCode = otpStore.get(identifier);
-        validateOtp(otpCode, identifier, otp);
-        otpStore.remove(identifier);
+        if (otpCode == null || !otpCode.getCode().equals(otp) || otpExpired(otpCode)) {
+            otpStore.remove(identifier);
+            throw new InvalidOtpException("Invalid or expired OTP.");
+        }
 
+        otpStore.remove(identifier);
         String resetToken = generateResetToken(identifier);
-        logger.debug("Generated reset token for identifier {}: {}", identifier, resetToken);
+        logger.info("Generated reset token for identifier: {}", identifier);
         return resetToken;
     }
 
     public void resetPassword(String identifier, String resetToken, String newPassword) {
-        User user = getUserByIdentifier(identifier);
+        User user = getUserByEmail(identifier);
         validateResetToken(identifier, resetToken);
 
-        updatePassword(user, newPassword);
+        user.setHashedPassword(passwordEncoder.encode(newPassword));
+        userRepository.save(user);
         resetTokenStore.remove(identifier);
-        logger.debug("Password reset successfully for identifier {}", identifier);
+        logger.info("Password reset successfully for identifier: {}", identifier);
     }
 
-    private User getUserByIdentifier(String identifier) {
-        return userRepository.findByEmail(identifier)
-                .orElseThrow(() -> new UserNotFoundException("User not found for identifier: " + identifier));
+    private User getUserByEmail(String email) {
+        return userRepository.findByEmail(email)
+                .orElseThrow(() -> new UserNotFoundException("User not found for identifier: " + email));
     }
 
     private String generateOtp() {
         return String.format("%06d", new Random().nextInt(999999));
     }
 
-    private void validateOtp(OtpCode otpCode, String identifier, String otp) {
-        if (otpCode == null || !otpCode.getCode().equals(otp)) {
-            logger.warn("Invalid OTP for identifier {}: expected={}, received={}", identifier, otpCode, otp);
-            throw new InvalidOtpException("Invalid OTP.");
-        }
-        if (otpCode.getExpiration().isBefore(Instant.now())) {
-            otpStore.remove(identifier);
-            logger.warn("Expired OTP for identifier {}: {}", identifier, otp);
-            throw new InvalidOtpException("OTP has expired.");
-        }
+    private boolean otpExpired(OtpCode otpCode) {
+        return otpCode.getExpiration().isBefore(Instant.now());
     }
 
     private String generateResetToken(String identifier) {
@@ -91,14 +87,7 @@ public class OtpService {
     private void validateResetToken(String identifier, String resetToken) {
         ResetToken storedToken = resetTokenStore.get(identifier);
         if (storedToken == null || !storedToken.getToken().equals(resetToken) || Instant.now().isAfter(storedToken.getExpiration())) {
-            logger.warn("Invalid or expired reset token for identifier {}: expected={}, provided={}", identifier, storedToken, resetToken);
             throw new InvalidResetTokenException("Invalid or expired reset token.");
         }
-    }
-
-    private void updatePassword(User user, String newPassword) {
-        user.setHashedPassword(passwordEncoder.encode(newPassword));
-        userRepository.save(user);
-        logger.debug("Password updated for user {}", user.getEmail());
     }
 }

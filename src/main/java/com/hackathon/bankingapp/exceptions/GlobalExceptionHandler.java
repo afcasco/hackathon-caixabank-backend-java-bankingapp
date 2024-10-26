@@ -39,6 +39,12 @@ public class GlobalExceptionHandler {
         );
     }
 
+    @ExceptionHandler(InvalidPinException.class)
+    public ResponseEntity<?> handleInvalidPinException(InvalidPinException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", ex.getMessage()));
+    }
+
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, String>> handleGenericException(Exception e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
