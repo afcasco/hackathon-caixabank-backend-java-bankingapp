@@ -2,10 +2,18 @@ package com.hackathon.bankingapp.exceptions;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.bind.annotation.ResponseStatus;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Collectors;
 
 @ControllerAdvice
 public class GlobalExceptionHandler {
@@ -40,8 +48,8 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(InvalidPinException.class)
-    public ResponseEntity<Map<String, String>> handleInvalidPinException(InvalidPinException ex) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", ex.getMessage()));
+    public ResponseEntity<String> handleInvalidPinException(InvalidPinException ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ex.getMessage());
     }
 
     @ExceptionHandler(Exception.class)
@@ -50,4 +58,54 @@ public class GlobalExceptionHandler {
                 Map.of("error", "Unable to process request")
         );
     }
+
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    @ResponseBody
+    public String handleValidationExceptions(MethodArgumentNotValidException ex) {
+        List<FieldError> fieldErrors = ex.getBindingResult().getFieldErrors();
+
+        Optional<String> emailError = fieldErrors.stream()
+                .filter(error -> "email".equals(error.getField()))
+                .map(FieldError::getDefaultMessage)
+                .findFirst();
+
+        if (emailError.isPresent()) {
+            return emailError.get();
+        }
+
+        List<String> errorMessages = fieldErrors.stream()
+                .map(FieldError::getDefaultMessage)
+                .collect(Collectors.toList());
+
+        boolean hasWhitespaceError = errorMessages.contains("Password cannot contain whitespace");
+
+        if (hasWhitespaceError) {
+            errorMessages = new ArrayList<>();
+            errorMessages.add("Password cannot contain whitespace");
+        } else {
+            boolean missingDigit = errorMessages.contains("Password must contain at least one digit");
+            boolean missingSpecialChar = errorMessages.contains("Password must contain at least one special character");
+
+            if (missingDigit && missingSpecialChar) {
+                errorMessages.remove("Password must contain at least one digit");
+                errorMessages.remove("Password must contain at least one special character");
+                errorMessages.add("Password must contain at least one digit and one special character");
+            }
+        }
+
+        return errorMessages.stream()
+                .distinct()
+                .collect(Collectors.joining(" and "));
+    }
+
+
+
+
+    @ExceptionHandler(InsufficientBalanceException.class)
+    public ResponseEntity<String> handleInsufficientBalanceException(InsufficientBalanceException ex) {
+        return new ResponseEntity<>(ex.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+
 }

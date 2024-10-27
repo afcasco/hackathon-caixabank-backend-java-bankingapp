@@ -2,6 +2,7 @@ package com.hackathon.bankingapp.controllers;
 
 import com.hackathon.bankingapp.dto.*;
 import com.hackathon.bankingapp.services.OtpService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -27,7 +28,7 @@ public class PasswordResetController {
     }
 
     @PostMapping
-    public ResponseEntity<PasswordResetResponseDto> resetPassword(@RequestBody PasswordResetRequestDto requestDto) {
+    public ResponseEntity<PasswordResetResponseDto> resetPassword(@Valid @RequestBody PasswordResetRequestDto requestDto) {
         otpService.resetPassword(requestDto.getIdentifier(), requestDto.getResetToken(), requestDto.getNewPassword());
         return ResponseEntity.ok(new PasswordResetResponseDto("Password reset successfully"));
     }

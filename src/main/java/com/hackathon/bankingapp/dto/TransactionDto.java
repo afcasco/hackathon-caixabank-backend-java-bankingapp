@@ -4,6 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.Instant;
 import java.util.UUID;
 
 @Data
@@ -57,11 +58,20 @@ public class TransactionDto {
     @AllArgsConstructor
     public static class Response {
         private Long id;
-        private UUID sourceAccountNumber;
-        private UUID targetAccountNumber;
         private Double amount;
         private String transactionType;
-        private String assetSymbol; // for asset transactions
         private Long transactionDate;
+        private String sourceAccountNumber;
+        private String targetAccountNumber;
+
+
+        public Response(Long id, UUID sourceAccount, UUID targetAccount, Double amount, String transactionType, Instant transactionDate) {
+            this.id = id;
+            this.amount = amount;
+            this.transactionType = transactionType;
+            this.transactionDate = transactionDate.toEpochMilli();
+            this.sourceAccountNumber = sourceAccount.toString();
+            this.targetAccountNumber = (targetAccount != null) ? targetAccount.toString() : "N/A";
+        }
     }
 }

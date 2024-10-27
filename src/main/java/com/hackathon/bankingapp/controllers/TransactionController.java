@@ -2,6 +2,7 @@ package com.hackathon.bankingapp.controllers;
 
 import com.hackathon.bankingapp.dto.MessageDto;
 import com.hackathon.bankingapp.dto.TransactionDto;
+import com.hackathon.bankingapp.entities.CustomUserDetails;
 import com.hackathon.bankingapp.mappers.MessageMapper;
 import com.hackathon.bankingapp.mappers.TransactionMapper;
 import com.hackathon.bankingapp.services.TransactionService;
@@ -25,46 +26,52 @@ public class TransactionController {
     @PostMapping("/deposit")
     public ResponseEntity<MessageDto> deposit(
             @RequestBody TransactionDto.DepositRequest request,
-            @AuthenticationPrincipal UUID accountNumber) {
-        String message = transactionService.deposit(accountNumber, request.getPin(), request.getAmount());
-        return ResponseEntity.ok(messageMapper.toMessageDto(message));
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        return ResponseEntity.ok(messageMapper.toMessageDto(
+                transactionService.deposit(userDetails.getAccountNumber(), request.getPin(), request.getAmount())
+        ));
     }
 
     @PostMapping("/withdraw")
     public ResponseEntity<MessageDto> withdraw(
             @RequestBody TransactionDto.WithdrawRequest request,
-            @AuthenticationPrincipal UUID accountNumber) {
-        String message = transactionService.withdraw(accountNumber, request.getPin(), request.getAmount());
-        return ResponseEntity.ok(messageMapper.toMessageDto(message));
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        return ResponseEntity.ok(messageMapper.toMessageDto(
+                transactionService.withdraw(userDetails.getAccountNumber(), request.getPin(), request.getAmount())
+        ));
     }
 
     @PostMapping("/fund-transfer")
     public ResponseEntity<MessageDto> fundTransfer(
             @RequestBody TransactionDto.TransferRequest request,
-            @AuthenticationPrincipal UUID accountNumber) {
-        String message = transactionService.transfer(accountNumber, request.getPin(), request.getTargetAccountNumber(), request.getAmount());
-        return ResponseEntity.ok(messageMapper.toMessageDto(message));
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        return ResponseEntity.ok(messageMapper.toMessageDto(
+                transactionService.transfer(userDetails.getAccountNumber(), request.getPin(), request.getTargetAccountNumber(), request.getAmount())
+        ));
     }
 
     @PostMapping("/buy-asset")
-    public ResponseEntity<MessageDto> buyAsset(
+    public ResponseEntity<String> buyAsset(
             @RequestBody TransactionDto.AssetTransactionRequest request,
-            @AuthenticationPrincipal UUID accountNumber) {
-        String message = transactionService.buyAsset(accountNumber, request.getPin(), request.getAssetSymbol(), request.getAmount());
-        return ResponseEntity.ok(messageMapper.toMessageDto(message));
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        return ResponseEntity.ok(
+                transactionService.buyAsset(userDetails.getAccountNumber(), request.getPin(), request.getAssetSymbol(), request.getAmount())
+        );
     }
 
     @PostMapping("/sell-asset")
-    public ResponseEntity<MessageDto> sellAsset(
+    public ResponseEntity<String> sellAsset(
             @RequestBody TransactionDto.AssetTransactionRequest request,
-            @AuthenticationPrincipal UUID accountNumber) {
-        String message = transactionService.sellAsset(accountNumber, request.getPin(), request.getAssetSymbol(), request.getQuantity());
-        return ResponseEntity.ok(messageMapper.toMessageDto(message));
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        return ResponseEntity.ok(
+                transactionService.sellAsset(userDetails.getAccountNumber(), request.getPin(), request.getAssetSymbol(), request.getQuantity())
+        );
     }
 
     @GetMapping("/transactions")
-    public ResponseEntity<List<TransactionDto.Response>> getTransactionHistory(@AuthenticationPrincipal UUID accountNumber) {
-        List<TransactionDto.Response> transactionHistory = transactionMapper.toDtoList(transactionService.getTransactionHistory(accountNumber));
-        return ResponseEntity.ok(transactionHistory);
+    public ResponseEntity<List<TransactionDto.Response>> getTransactionHistory(@AuthenticationPrincipal CustomUserDetails userDetails) {
+        return ResponseEntity.ok(
+                transactionMapper.toDtoList(transactionService.getTransactionHistory(userDetails.getAccountNumber()))
+        );
     }
 }

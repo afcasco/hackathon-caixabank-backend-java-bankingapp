@@ -7,8 +7,8 @@ import com.hackathon.bankingapp.entities.UserAsset;
 import com.hackathon.bankingapp.exceptions.InsufficientBalanceException;
 import com.hackathon.bankingapp.exceptions.UserNotFoundException;
 import com.hackathon.bankingapp.repositories.TransactionRepository;
-import com.hackathon.bankingapp.repositories.UserRepository;
 import com.hackathon.bankingapp.repositories.UserAssetRepository;
+import com.hackathon.bankingapp.repositories.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -63,26 +63,35 @@ public class TransactionService {
         return "Fund transferred successfully";
     }
 
-    @Transactional
-    public String buyAsset(UUID accountNumber, String pin, String assetSymbol, double amount) {
+    public String buyAsset(UUID accountNumber, String pin, String assetSymbol, double amountToSpend) {
         User user = getUserByAccountNumber(accountNumber);
         pinService.verifyPin(accountNumber, pin);
+
         double assetPrice = marketService.getPriceForSymbol(assetSymbol);
-        double quantityToBuy = amount / assetPrice;
+        if (assetPrice <= 0) {
+            throw new IllegalArgumentException("Invalid asset price for " + assetSymbol);
+        }
 
-        if (user.getBalance() < amount) throw new InsufficientBalanceException("Insufficient balance");
+        double quantityToBuy = Math.round((amountToSpend / assetPrice) * 100.0) / 100.0;
 
-        user.setBalance(user.getBalance() - amount);
+        if (user.getBalance() < amountToSpend) {
+            throw new InsufficientBalanceException("Internal error occurred while purchasing the asset.");
+        }
+
+        user.setBalance(user.getBalance() - amountToSpend);
         userRepository.save(user);
 
         UserAsset asset = new UserAsset(null, user, assetSymbol, quantityToBuy, assetPrice, Instant.now());
         userAssetRepository.save(asset);
 
-        saveTransaction(accountNumber, amount, TransactionType.ASSET_PURCHASE, assetSymbol);
-        emailService.sendInvestmentConfirmation(user, assetSymbol, quantityToBuy, amount, "Investment Purchase Confirmation");
+        saveTransaction(accountNumber, amountToSpend, TransactionType.ASSET_PURCHASE, assetSymbol);
+
+        emailService.sendInvestmentConfirmation(user, assetSymbol, quantityToBuy, amountToSpend, "Investment Purchase Confirmation");
 
         return "Asset purchase successful";
     }
+
+
 
     @Transactional
     public String sellAsset(UUID accountNumber, String pin, String assetSymbol, double quantityToSell) {
@@ -92,31 +101,36 @@ public class TransactionService {
         List<UserAsset> userAssets = userAssetRepository.findByUserAndSymbol(user, assetSymbol);
         double totalQuantity = userAssets.stream().mapToDouble(UserAsset::getQuantity).sum();
         if (totalQuantity < quantityToSell) {
-            throw new InsufficientBalanceException("Insufficient asset quantity for sale");
+            throw new InsufficientBalanceException("Internal error occurred while selling the asset.");
         }
 
-        double currentPrice = marketService.getPriceForSymbol(assetSymbol);
-        double saleProceeds = quantityToSell * currentPrice;
-        user.setBalance(user.getBalance() + saleProceeds);
-        userRepository.save(user);
-
+        double saleProceeds = quantityToSell * marketService.getPriceForSymbol(assetSymbol);
+        double costBasis = 0.0;
         double remainingQuantity = quantityToSell;
+
         for (UserAsset asset : userAssets) {
             if (asset.getQuantity() <= remainingQuantity) {
                 remainingQuantity -= asset.getQuantity();
+                costBasis += asset.getQuantity() * asset.getPurchasePrice();
                 userAssetRepository.delete(asset);
             } else {
+                costBasis += remainingQuantity * asset.getPurchasePrice();
                 asset.setQuantity(asset.getQuantity() - remainingQuantity);
                 userAssetRepository.save(asset);
                 break;
             }
         }
 
+        double profitOrLoss = saleProceeds - costBasis;
+        user.setBalance(user.getBalance() + saleProceeds);
+        userRepository.save(user);
+
         saveTransaction(accountNumber, saleProceeds, TransactionType.ASSET_SELL, assetSymbol);
-        emailService.sendInvestmentConfirmation(user, assetSymbol, -quantityToSell, saleProceeds, "Investment Sale Confirmation");
+        emailService.sendSaleConfirmation(user, assetSymbol, quantityToSell, profitOrLoss, "Investment Sale Confirmation");
 
         return "Asset sale successful";
     }
+
 
     public List<Transaction> getTransactionHistory(UUID accountNumber) {
         return transactionRepository.findBySourceAccountNumber(accountNumber);

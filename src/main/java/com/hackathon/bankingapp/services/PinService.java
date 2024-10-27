@@ -62,7 +62,7 @@ public class PinService {
                 .orElseThrow(() -> new UserNotFoundException("User not found for account number: " + accountNumber));
 
         if (user.getHashedPin() == null) {
-            throw new PinNotSetException("PIN not set for this account");
+            throw new InvalidPinException("Invalid PIN");
         }
 
         if (!passwordEncoder.matches(pin, user.getHashedPin())) {

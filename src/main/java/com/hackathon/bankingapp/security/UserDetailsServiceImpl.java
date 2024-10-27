@@ -1,5 +1,6 @@
 package com.hackathon.bankingapp.security;
 
+import com.hackathon.bankingapp.entities.CustomUserDetails;
 import com.hackathon.bankingapp.entities.User;
 import com.hackathon.bankingapp.repositories.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -22,8 +23,8 @@ public class UserDetailsServiceImpl implements UserDetailsService {
         UUID accountUUID = UUID.fromString(accountNumber);
         User user = userRepository.findByAccountNumber(accountUUID)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found with account number: " + accountNumber));
-        return new org.springframework.security.core.userdetails.User(
-                user.getAccountNumber().toString(),
+        return new CustomUserDetails(
+                user.getAccountNumber(),
                 user.getHashedPassword(),
                 new ArrayList<>());
     }

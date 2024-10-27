@@ -24,8 +24,7 @@ public class UserService {
 
     public User registerUser(UserRegistrationDto registrationDto) {
         validateUserUniqueness(registrationDto);
-        User user = createUser(registrationDto);
-        return user;
+        return createUser(registrationDto);
     }
 
     public String loginUser(LoginRequestDto loginRequest) {
@@ -35,9 +34,8 @@ public class UserService {
     }
 
     public User getUserInfoByAccountNumber(String accountNumber) {
-        User user = userRepository.findByAccountNumber(UUID.fromString(accountNumber))
+        return userRepository.findByAccountNumber(UUID.fromString(accountNumber))
                 .orElseThrow(() -> new UserNotFoundException("User not found for account number: " + accountNumber));
-        return user;
     }
 
     private void validateUserUniqueness(UserRegistrationDto registrationDto) {
@@ -57,12 +55,20 @@ public class UserService {
     }
 
     private User findUserByIdentifier(String identifier) {
-        return identifier.contains("@")
-                ? userRepository.findByEmail(identifier)
-                .orElseThrow(() -> new UserNotFoundException("User not found for the given identifier: " + identifier))
-                : userRepository.findByAccountNumber(UUID.fromString(identifier))
-                .orElseThrow(() -> new UserNotFoundException("User not found for the given identifier: " + identifier));
+        if (identifier.contains("@")) {
+            return userRepository.findByEmail(identifier)
+                    .orElseThrow(() -> new UserNotFoundException("User not found for the given email: " + identifier));
+        } else {
+            try {
+                UUID accountNumber = UUID.fromString(identifier);
+                return userRepository.findByAccountNumber(accountNumber)
+                        .orElseThrow(() -> new UserNotFoundException("User not found for the given account number: " + identifier));
+            } catch (IllegalArgumentException e) {
+                throw new UserNotFoundException("User not found for the given account number: " + identifier);
+            }
+        }
     }
+
 
     private void validatePassword(String rawPassword, String hashedPassword) {
         if (!passwordEncoder.matches(rawPassword, hashedPassword)) {

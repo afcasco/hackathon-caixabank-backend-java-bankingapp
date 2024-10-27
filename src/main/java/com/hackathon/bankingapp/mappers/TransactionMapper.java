@@ -10,19 +10,20 @@ import java.util.stream.Collectors;
 @Component
 public class TransactionMapper {
 
-    public TransactionDto.Response toDto(Transaction transaction) {
+    public List<TransactionDto.Response> toDtoList(List<Transaction> transactions) {
+        return transactions.stream()
+                .map(this::toResponse)
+                .collect(Collectors.toList());
+    }
+
+    private TransactionDto.Response toResponse(Transaction transaction) {
         return new TransactionDto.Response(
                 transaction.getId(),
                 transaction.getSourceAccountNumber(),
                 transaction.getTargetAccountNumber(),
                 transaction.getAmount(),
-                transaction.getTransactionType().toString(),
-                transaction.getAssetSymbol(),
-                transaction.getTransactionDate().toEpochMilli()
+                transaction.getTransactionType().name(),
+                transaction.getTransactionDate()
         );
-    }
-
-    public List<TransactionDto.Response> toDtoList(List<Transaction> transactions) {
-        return transactions.stream().map(this::toDto).collect(Collectors.toList());
     }
 }

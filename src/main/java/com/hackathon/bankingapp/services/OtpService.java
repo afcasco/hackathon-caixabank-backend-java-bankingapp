@@ -39,7 +39,7 @@ public class OtpService {
         String otp = generateOtp();
         otpStore.put(identifier, new OtpCode(otp, user.getEmail(), Instant.now().plusSeconds(OTP_EXPIRATION_SECONDS)));
 
-        emailService.sendEmail(user.getEmail(), "OTP Code", "OTP: " + otp);
+        emailService.sendEmail(user.getEmail(), "OTP Code", "OTP:" + otp);
         logger.info("OTP sent to user with identifier: {}", identifier);
     }
 

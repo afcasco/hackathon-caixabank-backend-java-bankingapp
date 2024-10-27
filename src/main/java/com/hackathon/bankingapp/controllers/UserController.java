@@ -25,20 +25,17 @@ public class UserController {
 
     @PostMapping("/login")
     public ResponseEntity<LoginResponseDto> loginUser(@Valid @RequestBody LoginRequestDto loginRequest) {
-        String token = userService.loginUser(loginRequest);
-        return ResponseEntity.ok(new LoginResponseDto(token));
+        return ResponseEntity.ok(new LoginResponseDto(userService.loginUser(loginRequest)));
     }
 
     @PostMapping("/register")
     public ResponseEntity<UserResponseDto> registerUser(@Valid @RequestBody UserRegistrationDto registrationDto) {
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(userMapper.mapToResponseDto(userService.registerUser(registrationDto)));
+        return ResponseEntity.ok(userMapper.mapToResponseDto(userService.registerUser(registrationDto)));
     }
 
     @GetMapping("/logout")
     public ResponseEntity<String> logout(@RequestHeader("Authorization") String authHeader) {
-        String token = authHeader.replace("Bearer ", "");
-        tokenBlacklistService.blacklistToken(token);
+        tokenBlacklistService.blacklistToken(authHeader.replace("Bearer ", ""));
         SecurityContextHolder.clearContext();
         return ResponseEntity.ok("Logged out successfully");
     }
