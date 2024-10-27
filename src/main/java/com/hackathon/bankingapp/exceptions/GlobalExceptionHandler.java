@@ -18,6 +18,8 @@ import java.util.stream.Collectors;
 @ControllerAdvice
 public class GlobalExceptionHandler {
 
+    public static final String ERROR = "error";
+
     @ExceptionHandler(UserNotFoundException.class)
     public ResponseEntity<String> handleUserNotFoundException(UserNotFoundException ex) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ex.getMessage());
@@ -36,14 +38,14 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(InvalidOtpException.class)
     public ResponseEntity<Map<String, String>> handleInvalidOtpException(InvalidOtpException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
-                Map.of("error", "Invalid OTP")
+                Map.of(ERROR, "Invalid OTP")
         );
     }
 
     @ExceptionHandler(InvalidResetTokenException.class)
     public ResponseEntity<Map<String, String>> handleInvalidResetTokenException(InvalidResetTokenException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
-                Map.of("error", "Invalid reset token")
+                Map.of(ERROR, "Invalid reset token")
         );
     }
 
@@ -55,7 +57,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, String>> handleGenericException(Exception e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
-                Map.of("error", "Unable to process request")
+                Map.of(ERROR, "Unable to process request")
         );
     }
 

@@ -24,6 +24,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class SubscriptionService {
 
+    public static final String USER_NOT_FOUND = "User not found";
     private final UserRepository userRepository;
     private final UserAssetRepository userAssetRepository;
     private final TransactionRepository transactionRepository;
@@ -35,7 +36,7 @@ public class SubscriptionService {
     @Transactional
     public String createSubscription(UUID userId, String pin, double amount, int intervalSeconds) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new UserNotFoundException("User not found"));
+                .orElseThrow(() -> new UserNotFoundException(USER_NOT_FOUND));
         validatePin(user, pin);
 
         if (user.getBalance() < amount) {
@@ -50,7 +51,7 @@ public class SubscriptionService {
     @Transactional
     public String activateAutoInvestBot(UUID userId, String pin) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new UserNotFoundException("User not found"));
+                .orElseThrow(() -> new UserNotFoundException(USER_NOT_FOUND));
         validatePin(user, pin);
         activeAutoInvestBots.put(userId, true);
         return "Automatic investment enabled successfully.";
@@ -79,7 +80,7 @@ public class SubscriptionService {
     public void runAutoInvestBots() {
         for (UUID userId : activeAutoInvestBots.keySet()) {
             User user = userRepository.findById(userId)
-                    .orElseThrow(() -> new UserNotFoundException("User not found"));
+                    .orElseThrow(() -> new UserNotFoundException(USER_NOT_FOUND));
 
             for (UserAsset asset : user.getAssets()) {
                 double currentPrice = marketService.getPriceForSymbol(asset.getSymbol());
@@ -160,7 +161,7 @@ public class SubscriptionService {
     @Transactional
     public String cancelSubscription(UUID userId, String pin) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new UserNotFoundException("User not found"));
+                .orElseThrow(() -> new UserNotFoundException(USER_NOT_FOUND));
         validatePin(user, pin);
 
         List<Subscription> subscriptions = subscriptionRepository.findByUserAndActiveTrue(user);
