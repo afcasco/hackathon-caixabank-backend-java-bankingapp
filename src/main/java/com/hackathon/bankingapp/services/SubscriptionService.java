@@ -24,7 +24,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class SubscriptionService {
 
-    public static final String USER_NOT_FOUND = "User not found";
+    private static final String USER_NOT_FOUND = "User not found";
     private final UserRepository userRepository;
     private final UserAssetRepository userAssetRepository;
     private final TransactionRepository transactionRepository;
@@ -38,10 +38,7 @@ public class SubscriptionService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFoundException(USER_NOT_FOUND));
         validatePin(user, pin);
-
-        if (user.getBalance() < amount) {
-            throw new InsufficientBalanceException("Insufficient balance to create subscription.");
-        }
+        checkBalance(user, amount);
 
         Subscription subscription = new Subscription(user, amount, intervalSeconds);
         subscriptionRepository.save(subscription);
@@ -62,66 +59,88 @@ public class SubscriptionService {
     public void processSubscriptions() {
         List<Subscription> subscriptions = subscriptionRepository.findByActiveTrue();
         for (Subscription subscription : subscriptions) {
-            User user = subscription.getUser();
-            if (user.getBalance() < subscription.getAmount()) {
-                subscription.setActive(false);
-                subscriptionRepository.save(subscription);
-                continue;
-            }
-
-            user.setBalance(user.getBalance() - subscription.getAmount());
-            userRepository.save(user);
-            logTransaction(user.getAccountNumber(), subscription.getAmount(), TransactionType.SUBSCRIPTION);
+            processSubscription(subscription);
         }
+    }
+
+    private void processSubscription(Subscription subscription) {
+        User user = subscription.getUser();
+        if (!hasSufficientBalance(user, subscription.getAmount())) {
+            deactivateSubscription(subscription);
+        } else {
+            deductAndLogTransaction(user, subscription.getAmount(), TransactionType.SUBSCRIPTION, null);
+        }
+    }
+
+    private boolean hasSufficientBalance(User user, double amount) {
+        return user.getBalance() >= amount;
+    }
+
+    private void deactivateSubscription(Subscription subscription) {
+        subscription.setActive(false);
+        subscriptionRepository.save(subscription);
+    }
+
+    private void deductAndLogTransaction(User user, double amount, TransactionType type, String symbol) {
+        user.setBalance(user.getBalance() - amount);
+        userRepository.save(user);
+        logTransaction(user.getAccountNumber(), amount, type, symbol);
     }
 
     @Transactional
     @Scheduled(fixedRate = 3000)
     public void runAutoInvestBots() {
-        for (UUID userId : activeAutoInvestBots.keySet()) {
-            User user = userRepository.findById(userId)
-                    .orElseThrow(() -> new UserNotFoundException(USER_NOT_FOUND));
+        activeAutoInvestBots.keySet().forEach(this::processUserInvestments);
+    }
 
-            for (UserAsset asset : user.getAssets()) {
-                double currentPrice = marketService.getPriceForSymbol(asset.getSymbol());
-                double purchasePrice = asset.getPurchasePrice();
-                double quantity = asset.getQuantity();
+    private void processUserInvestments(UUID userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException(USER_NOT_FOUND));
 
-                if (currentPrice < purchasePrice * 0.8) {
-                    double amountToBuy = 0.1 * user.getBalance();
-                    if (user.getBalance() >= amountToBuy) {
-                        buyAsset(user, asset.getSymbol(), amountToBuy);
-                        Transaction transaction = new Transaction(
-                                null, user.getAccountNumber(), user.getAccountNumber(), amountToBuy,
-                                TransactionType.ASSET_PURCHASE, Instant.now(), asset.getSymbol());
-                        transactionRepository.save(transaction);
-                    }
-                }
-                else if (currentPrice > purchasePrice * 1.2) {
-                    double quantityToSell = 0.1 * quantity;
-                    if (quantityToSell > 0) {
-                        double proceeds = sellAsset(user, asset.getSymbol(), quantityToSell);
-                        Transaction transaction = new Transaction(
-                                null, user.getAccountNumber(), user.getAccountNumber(), proceeds,
-                                TransactionType.ASSET_SELL, Instant.now(), asset.getSymbol());
-                        transactionRepository.save(transaction);
-                    }
-                }
-            }
+        user.getAssets().forEach(asset -> evaluateAssetForInvestment(user, asset));
+    }
+
+    private void evaluateAssetForInvestment(User user, UserAsset asset) {
+        double currentPrice = marketService.getPriceForSymbol(asset.getSymbol());
+        double purchasePrice = asset.getPurchasePrice();
+
+        if (shouldBuyAsset(currentPrice, purchasePrice)) {
+            performBuy(user, asset, currentPrice);
+        } else if (shouldSellAsset(currentPrice, purchasePrice)) {
+            performSell(user, asset, currentPrice);
         }
     }
 
+    private boolean shouldBuyAsset(double currentPrice, double purchasePrice) {
+        return currentPrice < purchasePrice * 0.8;
+    }
 
+    private boolean shouldSellAsset(double currentPrice, double purchasePrice) {
+        return currentPrice > purchasePrice * 1.2;
+    }
 
+    private void performBuy(User user, UserAsset asset, double currentPrice) {
+        double amountToBuy = 0.1 * user.getBalance();
+        if (hasSufficientBalance(user, amountToBuy)) {
+            buyAsset(user, asset.getSymbol(), amountToBuy, currentPrice);
+            logTransaction(user.getAccountNumber(), amountToBuy, TransactionType.ASSET_PURCHASE, asset.getSymbol());
+        }
+    }
 
+    private void performSell(User user, UserAsset asset, double currentPrice) {
+        double quantityToSell = 0.1 * asset.getQuantity();
+        if (quantityToSell > 0) {
+            double proceeds = sellAsset(user, asset.getSymbol(), quantityToSell, currentPrice);
+            logTransaction(user.getAccountNumber(), proceeds, TransactionType.ASSET_SELL, asset.getSymbol());
+        }
+    }
 
-    private void logTransaction(UUID accountNumber, double amount, TransactionType type) {
-        Transaction transaction = new Transaction(null, accountNumber, accountNumber, amount, type, Instant.now(), null);
+    private void logTransaction(UUID accountNumber, double amount, TransactionType type, String symbol) {
+        Transaction transaction = new Transaction(null, accountNumber, accountNumber, amount, type, Instant.now(), symbol);
         transactionRepository.save(transaction);
     }
 
-    private void buyAsset(User user, String symbol, double amount) {
-        double currentPrice = marketService.getPriceForSymbol(symbol);
+    private void buyAsset(User user, String symbol, double amount, double currentPrice) {
         double quantityToBuy = amount / currentPrice;
 
         UserAsset asset = userAssetRepository.findByUserAndSymbol(user, symbol).stream().findAny()
@@ -131,31 +150,30 @@ public class SubscriptionService {
         asset.setPurchasePrice(currentPrice);
         userAssetRepository.save(asset);
 
-        user.setBalance(user.getBalance() - amount);
-        userRepository.save(user);
-
-        logTransaction(user.getAccountNumber(), amount, TransactionType.ASSET_PURCHASE);
+        deductAndLogTransaction(user, amount, TransactionType.ASSET_PURCHASE, symbol);
     }
 
-    private double sellAsset(User user, String symbol, double quantityToSell) {
+    private double sellAsset(User user, String symbol, double quantityToSell, double currentPrice) {
         UserAsset asset = userAssetRepository.findByUserAndSymbol(user, symbol)
                 .stream().findAny().orElseThrow(() -> new IllegalArgumentException("User does not own this asset"));
 
-        double currentPrice = marketService.getPriceForSymbol(symbol);
         double proceeds = quantityToSell * currentPrice;
 
+        updateAssetQuantityOrDelete(asset, quantityToSell);
+
+        user.setBalance(user.getBalance() + proceeds);
+        userRepository.save(user);
+
+        return proceeds;
+    }
+
+    private void updateAssetQuantityOrDelete(UserAsset asset, double quantityToSell) {
         asset.setQuantity(asset.getQuantity() - quantityToSell);
         if (asset.getQuantity() == 0) {
             userAssetRepository.delete(asset);
         } else {
             userAssetRepository.save(asset);
         }
-
-        user.setBalance(user.getBalance() + proceeds);
-        userRepository.save(user);
-
-        logTransaction(user.getAccountNumber(), proceeds, TransactionType.ASSET_SELL);
-        return proceeds;
     }
 
     @Transactional
@@ -166,10 +184,7 @@ public class SubscriptionService {
 
         List<Subscription> subscriptions = subscriptionRepository.findByUserAndActiveTrue(user);
         if (!subscriptions.isEmpty()) {
-            for (Subscription subscription : subscriptions) {
-                subscription.setActive(false);
-                subscriptionRepository.save(subscription);
-            }
+            subscriptions.forEach(this::deactivateSubscription);
             return "Subscription canceled successfully.";
         } else {
             return "No active subscription found for the user.";
@@ -179,6 +194,12 @@ public class SubscriptionService {
     private void validatePin(User user, String pin) {
         if (!passwordEncoder.matches(pin, user.getHashedPin())) {
             throw new InvalidPinException("Invalid PIN");
+        }
+    }
+
+    private void checkBalance(User user, double amount) {
+        if (user.getBalance() < amount) {
+            throw new InsufficientBalanceException("Insufficient balance to create subscription.");
         }
     }
 }
