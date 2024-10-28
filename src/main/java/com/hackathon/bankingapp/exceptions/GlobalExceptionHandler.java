@@ -36,10 +36,9 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(InvalidOtpException.class)
-    public ResponseEntity<Map<String, String>> handleInvalidOtpException(InvalidOtpException e) {
+    public ResponseEntity<String> handleInvalidOtpException(InvalidOtpException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
-                Map.of(ERROR, "Invalid OTP")
-        );
+                "Invalid OTP");
     }
 
     @ExceptionHandler(InvalidResetTokenException.class)
@@ -104,10 +103,15 @@ public class GlobalExceptionHandler {
 
 
 
-
     @ExceptionHandler(InsufficientBalanceException.class)
     public ResponseEntity<String> handleInsufficientBalanceException(InsufficientBalanceException ex) {
         return new ResponseEntity<>(ex.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
     }
+
+    @ExceptionHandler(InsufficientBalanceException400.class)
+    public ResponseEntity<String> handleInsufficientBalanceException(InsufficientBalanceException400 ex) {
+        return new ResponseEntity<>(ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
+
 
 }

@@ -15,16 +15,13 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor
 public class SubscriptionService {
 
-    private static final String USER_NOT_FOUND = "User not found";
+    private static final String USER_NOT_FOUND = "User not found for account number: ";
     private final UserRepository userRepository;
     private final UserAssetRepository userAssetRepository;
     private final TransactionRepository transactionRepository;
@@ -36,7 +33,7 @@ public class SubscriptionService {
     @Transactional
     public String createSubscription(UUID userId, String pin, double amount, int intervalSeconds) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new UserNotFoundException(USER_NOT_FOUND));
+                .orElseThrow(() -> new UserNotFoundException(USER_NOT_FOUND + userId));
         validatePin(user, pin);
         checkBalance(user, amount);
 
@@ -48,7 +45,7 @@ public class SubscriptionService {
     @Transactional
     public String activateAutoInvestBot(UUID userId, String pin) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new UserNotFoundException(USER_NOT_FOUND));
+                .orElseThrow(() -> new UserNotFoundException(USER_NOT_FOUND+userId));
         validatePin(user, pin);
         activeAutoInvestBots.put(userId, true);
         return "Automatic investment enabled successfully.";
@@ -95,9 +92,10 @@ public class SubscriptionService {
 
     private void processUserInvestments(UUID userId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new UserNotFoundException(USER_NOT_FOUND));
+                .orElseThrow(() -> new UserNotFoundException(USER_NOT_FOUND + userId));
 
-        user.getAssets().forEach(asset -> evaluateAssetForInvestment(user, asset));
+        List<UserAsset> assetsCopy = new ArrayList<>(user.getAssets());
+        assetsCopy.forEach(asset -> evaluateAssetForInvestment(user, asset));
     }
 
     private void evaluateAssetForInvestment(User user, UserAsset asset) {
@@ -179,7 +177,7 @@ public class SubscriptionService {
     @Transactional
     public String cancelSubscription(UUID userId, String pin) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new UserNotFoundException(USER_NOT_FOUND));
+                .orElseThrow(() -> new UserNotFoundException(USER_NOT_FOUND + userId));
         validatePin(user, pin);
 
         List<Subscription> subscriptions = subscriptionRepository.findByUserAndActiveTrue(user);

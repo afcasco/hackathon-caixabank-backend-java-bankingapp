@@ -15,25 +15,36 @@ public class TokenBlacklistService {
     private final BlacklistedTokenRepository blacklistedTokenRepository;
     private final JwtUtil jwtUtil;
 
-    public TokenBlacklistService(BlacklistedTokenRepository blacklistedTokenRepository,@Lazy JwtUtil jwtUtil) {
+    public TokenBlacklistService(BlacklistedTokenRepository blacklistedTokenRepository, @Lazy JwtUtil jwtUtil) {
         this.blacklistedTokenRepository = blacklistedTokenRepository;
         this.jwtUtil = jwtUtil;
     }
 
     public void blacklistToken(String token) {
         Instant expirationTime = jwtUtil.getExpirationDateFromToken(token);
-        blacklistedTokenRepository.save(new BlacklistedToken(token, expirationTime));
+        saveBlacklistedToken(token, expirationTime);
     }
 
     @Scheduled(cron = "0 0 * * * *")
     public void removeExpiredTokens() {
-        blacklistedTokenRepository.deleteByExpirationBefore(Instant.now());
+        deleteExpiredTokens();
     }
 
     public boolean isTokenBlacklisted(String token) {
         return blacklistedTokenRepository.findById(token)
-                .map(blacklistedToken -> Instant.now().isBefore(blacklistedToken.getExpiration()))
+                .map(this::isTokenStillValid)
                 .orElse(false);
     }
 
+    private void saveBlacklistedToken(String token, Instant expirationTime) {
+        blacklistedTokenRepository.save(new BlacklistedToken(token, expirationTime));
+    }
+
+    private void deleteExpiredTokens() {
+        blacklistedTokenRepository.deleteByExpirationBefore(Instant.now());
+    }
+
+    private boolean isTokenStillValid(BlacklistedToken blacklistedToken) {
+        return Instant.now().isBefore(blacklistedToken.getExpiration());
+    }
 }

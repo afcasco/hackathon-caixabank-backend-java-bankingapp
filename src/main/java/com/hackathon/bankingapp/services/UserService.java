@@ -34,8 +34,7 @@ public class UserService {
     }
 
     public User getUserInfoByAccountNumber(String accountNumber) {
-        return userRepository.findByAccountNumber(UUID.fromString(accountNumber))
-                .orElseThrow(() -> new UserNotFoundException("User not found for account number: " + accountNumber));
+        return findUserByAccountNumber(UUID.fromString(accountNumber));
     }
 
     private void validateUserUniqueness(UserRegistrationDto registrationDto) {
@@ -49,31 +48,42 @@ public class UserService {
 
     private User createUser(UserRegistrationDto registrationDto) {
         String hashedPassword = passwordEncoder.encode(registrationDto.getPassword());
-        User user = new User(UUID.randomUUID(), registrationDto.getName(), registrationDto.getEmail(),
-                 registrationDto.getPhoneNumber(), registrationDto.getAddress(), 0.0, hashedPassword);
-        return userRepository.save(user);
+        return userRepository.save(new User(
+                UUID.randomUUID(),
+                registrationDto.getName(),
+                registrationDto.getEmail(),
+                registrationDto.getPhoneNumber(),
+                registrationDto.getAddress(),
+                0.0,
+                hashedPassword
+        ));
     }
 
     private User findUserByIdentifier(String identifier) {
-        if (identifier.contains("@")) {
-            return userRepository.findByEmail(identifier)
-                    .orElseThrow(() -> new UserNotFoundException("User not found for the given email: " + identifier));
-        } else {
-            try {
-                UUID accountNumber = UUID.fromString(identifier);
-                return userRepository.findByAccountNumber(accountNumber)
-                        .orElseThrow(() -> new UserNotFoundException("User not found for the given account number: " + identifier));
-            } catch (IllegalArgumentException e) {
-                throw new UserNotFoundException("User not found for the given account number: " + identifier);
-            }
-        }
+        return identifier.contains("@") ? findUserByEmail(identifier) : findUserByAccountNumber(parseUUID(identifier));
     }
 
+    private User findUserByEmail(String email) {
+        return userRepository.findByEmail(email)
+                .orElseThrow(() -> new UserNotFoundException("User not found for the given email: " + email));
+    }
+
+    private User findUserByAccountNumber(UUID accountNumber) {
+        return userRepository.findByAccountNumber(accountNumber)
+                .orElseThrow(() -> new UserNotFoundException("User not found for account number: " + accountNumber));
+    }
+
+    private UUID parseUUID(String identifier) {
+        try {
+            return UUID.fromString(identifier);
+        } catch (IllegalArgumentException e) {
+            throw new UserNotFoundException("User not found for the given account number: " + identifier);
+        }
+    }
 
     private void validatePassword(String rawPassword, String hashedPassword) {
         if (!passwordEncoder.matches(rawPassword, hashedPassword)) {
             throw new InvalidCredentialsException();
         }
     }
-
 }

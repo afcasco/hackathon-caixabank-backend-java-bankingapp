@@ -7,6 +7,7 @@ import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 
 import java.text.DecimalFormat;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -20,25 +21,20 @@ public class EmailService {
     }
 
     public void sendInvestmentConfirmation(User user, String assetSymbol, double quantity, double amount, String subject) {
-        double currentHoldings = user.getAssets().stream()
-                .filter(asset -> asset.getSymbol().equals(assetSymbol))
-                .mapToDouble(UserAsset::getQuantity)
-                .sum();
+        String message = generateMessage(user, assetSymbol, quantity, amount, subject, calculateNetWorth(user));
+        sendEmail(user.getEmail(), subject, message);
+    }
 
-        String assetSummary = user.getAssets().stream()
-                .collect(Collectors.groupingBy(
-                        UserAsset::getSymbol,
-                        Collectors.teeing(
-                                Collectors.summingDouble(UserAsset::getQuantity),
-                                Collectors.averagingDouble(UserAsset::getPurchasePrice),
-                                (totalQuantity, avgPrice) -> String.format("%.2f units purchased at $%s", totalQuantity, df.format(avgPrice))
-                        )
-                ))
-                .entrySet().stream()
-                .map(entry -> String.format("- %s: %s", entry.getKey(), entry.getValue()))
-                .collect(Collectors.joining("\n"));
+    public void sendSaleConfirmation(User user, String assetSymbol, double quantitySold, double profitOrLoss, String subject) {
+        String message = generateSaleMessage(user, assetSymbol, quantitySold, profitOrLoss, calculateNetWorth(user));
+        sendEmail(user.getEmail(), subject, message);
+    }
 
-        String message = String.format(
+    private String generateMessage(User user, String assetSymbol, double quantity, double amount, String subject, double netWorth) {
+        double currentHoldings = getCurrentHoldings(user, assetSymbol);
+        String assetSummary = generateAssetSummary(user);
+
+        return String.format(
                 """
                         Dear %s,
                         
@@ -65,25 +61,15 @@ public class EmailService {
                 currentHoldings,
                 assetSummary,
                 df.format(user.getBalance()),
-                df.format(calculateNetWorth(user))
+                df.format(netWorth)
         );
-
-        sendEmail(user.getEmail(), subject, message);
     }
 
-    public void sendSaleConfirmation(User user, String assetSymbol, double quantitySold, double profitOrLoss, String subject) {
-        double currentHoldings = user.getAssets().stream()
-                .filter(asset -> asset.getSymbol().equals(assetSymbol))
-                .mapToDouble(UserAsset::getQuantity)
-                .sum();
+    private String generateSaleMessage(User user, String assetSymbol, double quantitySold, double profitOrLoss, double netWorth) {
+        double currentHoldings = getCurrentHoldings(user, assetSymbol);
+        String assetSummary = generateAssetSummary(user);
 
-        String assetSummary = user.getAssets().stream()
-                .collect(Collectors.groupingBy(UserAsset::getSymbol, Collectors.summingDouble(UserAsset::getQuantity)))
-                .entrySet().stream()
-                .map(entry -> String.format("- %s: %.2f units purchased at $%.2f", entry.getKey(), entry.getValue(), user.getAssets().getFirst().getPurchasePrice()))
-                .collect(Collectors.joining("\n"));
-
-        String message = String.format(
+        return String.format(
                 """
                         Dear %s,
     
@@ -112,13 +98,31 @@ public class EmailService {
                 currentHoldings,
                 assetSummary,
                 df.format(user.getBalance()),
-                df.format(calculateNetWorth(user))
+                df.format(netWorth)
         );
-
-        sendEmail(user.getEmail(), subject, message);
     }
 
+    private double getCurrentHoldings(User user, String assetSymbol) {
+        return user.getAssets().stream()
+                .filter(asset -> asset.getSymbol().equals(assetSymbol))
+                .mapToDouble(UserAsset::getQuantity)
+                .sum();
+    }
 
+    private String generateAssetSummary(User user) {
+        Map<String, String> summary = user.getAssets().stream()
+                .collect(Collectors.groupingBy(
+                        UserAsset::getSymbol,
+                        Collectors.collectingAndThen(
+                                Collectors.summarizingDouble(UserAsset::getQuantity),
+                                stats -> String.format("%.2f units purchased at $%s", stats.getSum(), df.format(stats.getAverage()))
+                        )
+                ));
+
+        return summary.entrySet().stream()
+                .map(entry -> String.format("- %s: %s", entry.getKey(), entry.getValue()))
+                .collect(Collectors.joining("\n"));
+    }
 
     private double calculateNetWorth(User user) {
         return user.getBalance() + user.getAssets().stream()
@@ -131,7 +135,6 @@ public class EmailService {
         message.setTo(to);
         message.setSubject(subject);
         message.setText(text);
-
         mailSender.send(message);
     }
 }

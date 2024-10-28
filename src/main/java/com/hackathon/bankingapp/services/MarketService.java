@@ -18,18 +18,24 @@ public class MarketService {
     }
 
     public Map<String, Double> getAllPrices() {
-        return fetchPricesFromApi().orElse(Collections.emptyMap());
+        return fetchPricesFromApi().orElseGet(Collections::emptyMap);
     }
 
     public Double getPriceForSymbol(String symbol) {
-        return fetchPricesFromApi().map(prices -> prices.get(symbol.toUpperCase())).orElse(null);
+        return fetchPricesFromApi()
+                .map(prices -> prices.get(symbol.toUpperCase()))
+                .orElse(null);
     }
 
     private Optional<Map<String, Double>> fetchPricesFromApi() {
+        return Optional.ofNullable(getPricesFromApi());
+    }
+
+    private Map<String, Double> getPricesFromApi() {
         try {
-            return Optional.ofNullable(restTemplate.getForObject(PRICE_API_URL, Map.class));
+            return restTemplate.getForObject(PRICE_API_URL, Map.class);
         } catch (Exception e) {
-            return Optional.empty();
+            return null;
         }
     }
 }

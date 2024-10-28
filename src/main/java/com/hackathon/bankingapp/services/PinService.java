@@ -16,58 +16,54 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class PinService {
 
-    public static final String USER_NOT_FOUND_FOR_ACCOUNT_NUMBER = "User not found for account number: ";
+    private static final String USER_NOT_FOUND_FOR_ACCOUNT_NUMBER = "User not found for account number: ";
+    private static final String INVALID_PIN = "Invalid PIN";
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
-    private static final String INVALID_PIN = "Invalid PIN";
-
 
     @Transactional
     public String createPin(UUID accountNumber, String pin, String password) {
-        User user = userRepository.findByAccountNumber(accountNumber)
-                .orElseThrow(() -> new UserNotFoundException(USER_NOT_FOUND_FOR_ACCOUNT_NUMBER + accountNumber));
+        User user = fetchUser(accountNumber);
+        validatePassword(password, user);
 
-        if (!passwordEncoder.matches(password, user.getHashedPassword())) {
-            throw new InvalidCredentialsException();
-        }
-
-        user.setHashedPin(passwordEncoder.encode(pin));
-        userRepository.save(user);
-
+        setNewPin(user, pin);
         return "PIN created successfully";
     }
 
-
     @Transactional
     public String updatePin(UUID accountNumber, String oldPin, String password, String newPin) {
-        User user = userRepository.findByAccountNumber(accountNumber)
-                .orElseThrow(() -> new UserNotFoundException(USER_NOT_FOUND_FOR_ACCOUNT_NUMBER + accountNumber));
+        User user = fetchUser(accountNumber);
+        validatePassword(password, user);
+        validateExistingPin(oldPin, user);
 
-        if (!passwordEncoder.matches(password, user.getHashedPassword())) {
-            throw new InvalidCredentialsException();
-        }
-
-        if (user.getHashedPin() == null || !passwordEncoder.matches(oldPin, user.getHashedPin())) {
-            throw new InvalidPinException(INVALID_PIN);
-        }
-
-        user.setHashedPin(passwordEncoder.encode(newPin));
-        userRepository.save(user);
-
+        setNewPin(user, newPin);
         return "PIN updated successfully";
     }
 
-
     public void verifyPin(UUID accountNumber, String pin) {
-        User user = userRepository.findByAccountNumber(accountNumber)
+        User user = fetchUser(accountNumber);
+        validateExistingPin(pin, user);
+    }
+
+    private User fetchUser(UUID accountNumber) {
+        return userRepository.findByAccountNumber(accountNumber)
                 .orElseThrow(() -> new UserNotFoundException(USER_NOT_FOUND_FOR_ACCOUNT_NUMBER + accountNumber));
+    }
 
-        if (user.getHashedPin() == null) {
+    private void validatePassword(String password, User user) {
+        if (!passwordEncoder.matches(password, user.getHashedPassword())) {
+            throw new InvalidCredentialsException();
+        }
+    }
+
+    private void validateExistingPin(String pin, User user) {
+        if (user.getHashedPin() == null || !passwordEncoder.matches(pin, user.getHashedPin())) {
             throw new InvalidPinException(INVALID_PIN);
         }
+    }
 
-        if (!passwordEncoder.matches(pin, user.getHashedPin())) {
-            throw new InvalidPinException(INVALID_PIN);
-        }
+    private void setNewPin(User user, String pin) {
+        user.setHashedPin(passwordEncoder.encode(pin));
+        userRepository.save(user);
     }
 }

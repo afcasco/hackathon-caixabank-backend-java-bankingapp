@@ -5,6 +5,7 @@ import com.hackathon.bankingapp.entities.TransactionType;
 import com.hackathon.bankingapp.entities.User;
 import com.hackathon.bankingapp.entities.UserAsset;
 import com.hackathon.bankingapp.exceptions.InsufficientBalanceException;
+import com.hackathon.bankingapp.exceptions.InsufficientBalanceException400;
 import com.hackathon.bankingapp.exceptions.UserNotFoundException;
 import com.hackathon.bankingapp.repositories.TransactionRepository;
 import com.hackathon.bankingapp.repositories.UserAssetRepository;
@@ -42,7 +43,7 @@ public class TransactionService {
     public String withdraw(UUID accountNumber, String pin, Double amount) {
         User user = getUserByAccountNumber(accountNumber);
         pinService.verifyPin(accountNumber, pin);
-        if (user.getBalance() < amount) throw new InsufficientBalanceException("Insufficient balance");
+        if (user.getBalance() < amount) throw new InsufficientBalanceException400("Insufficient balance");
         user.setBalance(user.getBalance() - amount);
         userRepository.save(user);
         saveTransaction(accountNumber, amount, TransactionType.CASH_WITHDRAWAL, null);
@@ -54,7 +55,7 @@ public class TransactionService {
         User sender = getUserByAccountNumber(sourceAccount);
         User receiver = getUserByAccountNumber(targetAccount);
         pinService.verifyPin(sourceAccount, pin);
-        if (sender.getBalance() < amount) throw new InsufficientBalanceException("Insufficient balance");
+        if (sender.getBalance() < amount) throw new InsufficientBalanceException400("Insufficient balance");
         sender.setBalance(sender.getBalance() - amount);
         receiver.setBalance(receiver.getBalance() + amount);
         userRepository.save(sender);
@@ -138,7 +139,7 @@ public class TransactionService {
 
     private User getUserByAccountNumber(UUID accountNumber) {
         return userRepository.findByAccountNumber(accountNumber)
-                .orElseThrow(() -> new UserNotFoundException("User not found"));
+                .orElseThrow(() -> new UserNotFoundException("User not found for account number: " + accountNumber));
     }
 
     private void saveTransaction(UUID accountNumber, double amount, TransactionType type, String assetSymbol) {
